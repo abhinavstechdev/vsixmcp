@@ -12,10 +12,11 @@ function resolve(root, relative) {
 }
 function isSensitive(value) {
   const normalized = value.replace(/\\/g, "/").toLowerCase();
-  const base = normalized.split("/").pop() || normalized;
+  const parts = normalized.split("/").filter(Boolean);
+  const base = parts.at(-1) || normalized;
   return base === ".env" || base.startsWith(".env.") || base.includes("secret") ||
     base.includes("credential") || base.includes("private_key") || base.endsWith(".pem") ||
-    base.endsWith(".key") || normalized.includes("/.ssh/") || normalized.includes("/.aws/");
+    base.endsWith(".key") || parts.includes(".ssh") || parts.includes(".aws");
 }
 
 test("workspace resolver accepts child paths", () => {
@@ -32,7 +33,7 @@ test("workspace resolver rejects empty and null-byte paths", () => {
   assert.throws(() => resolve("/workspace", "ok\0bad"));
 });
 test("sensitive path filter rejects env files and key material", () => {
-  for (const file of [".env", ".env.production", "api_secret.txt", "id_rsa.pem", "credentials.json", ".ssh/id_key"]) {
+  for (const file of [".env", ".env.production", "api_secret.txt", "id_rsa.pem", "credentials.json", ".ssh/id_key", ".aws/config"]) {
     assert.equal(isSensitive(file), true, file);
   }
 });
