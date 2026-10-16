@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+dist/
+out/
+coverage/
+*.vsix
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Editors and operating systems
+.vscode-test/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Laravel/PHP runtime artifacts
+apps/backend/vendor/
+apps/backend/storage/*.key
+apps/backend/storage/logs/*
+apps/backend/bootstrap/cache/*
+apps/backend/.phpunit.result.cache
