@@ -1,0 +1,141 @@
+{
+  "name": "vsixmcp-extension",
+  "displayName": "ChatGPT MCP Coder",
+  "description": "AI coding assistant with MCP tools and review-first code changes",
+  "version": "0.1.0",
+  "publisher": "abhinavstechdev",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "AI",
+    "MCP",
+    "coding assistant"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vsixmcp.openChat",
+        "title": "ChatGPT MCP: Open Chat"
+      },
+      {
+        "command": "vsixmcp.newConversation",
+        "title": "ChatGPT MCP: New Conversation"
+      },
+      {
+        "command": "vsixmcp.explainSelection",
+        "title": "ChatGPT MCP: Explain Selection"
+      },
+      {
+        "command": "vsixmcp.editSelection",
+        "title": "ChatGPT MCP: Edit Selection"
+      },
+      {
+        "command": "vsixmcp.configureApiKey",
+        "title": "ChatGPT MCP: Configure OpenAI API Key"
+      },
+      {
+        "command": "vsixmcp.clearApiKey",
+        "title": "ChatGPT MCP: Clear OpenAI API Key"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vsixmcp",
+          "title": "MCP Coder",
+          "icon": "resources/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "vsixmcp": [
+        {
+          "id": "vsixmcp.chatView",
+          "name": "AI Coding Chat"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ChatGPT MCP Coder",
+      "properties": {
+        "vsixmcp.provider": {
+          "type": "string",
+          "default": "openai",
+          "enum": [
+            "openai"
+          ],
+          "description": "AI provider adapter to use."
+        },
+        "vsixmcp.model": {
+          "type": "string",
+          "default": "gpt-4.1-mini",
+          "description": "OpenAI API model name; availability depends on your API account."
+        },
+        "vsixmcp.requireApproval": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require approval before applying generated edits."
+        },
+        "vsixmcp.context.maxFiles": {
+          "type": "number",
+          "default": 12,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum workspace files listed for context."
+        },
+        "vsixmcp.context.maxFileSize": {
+          "type": "number",
+          "default": 100000,
+          "minimum": 1024,
+          "maximum": 1000000,
+          "description": "Maximum text file size in bytes for reading context."
+        },
+        "vsixmcp.context.ignorePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.env",
+            "**/.env.*",
+            "**/*secret*",
+            "**/*credential*"
+          ],
+          "description": "Glob patterns excluded from default workspace context."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "check-types": "tsc --noEmit",
+    "test": "node --test ./tests/*.test.cjs",
+    "package:vsix": "npm run check-types && npm run build && vsce package"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "openai": "^5.12.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.3",
+    "@vscode/vsce": "^3.6.0"
+  }
+}
