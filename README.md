@@ -2,99 +2,114 @@
 
 An AI coding assistant for VS Code and compatible editors, designed to connect to MCP servers, inspect workspaces, propose precise code edits, and let developers review changes before applying them.
 
-> **Status:** Project foundation and architecture specification. This repository is not yet a complete or packaged VS Code extension. Features are implemented and verified only when noted explicitly in project documentation and tests.
+## Current status
 
-## Goals
+The initial TypeScript VS Code extension scaffold is committed. The current GitHub Actions run has passed TypeScript type-checking, the focused security tests, the extension bundle build, and VSIX packaging. The workflow uploaded a VSIX artifact for this build.
 
-- VS Code extension written in TypeScript.
-- AI provider abstraction, initially targeting the OpenAI API.
-- MCP client support for explicitly configured local stdio and remote Streamable HTTP servers.
-- Workspace-aware coding assistance with line/range edits and multi-file proposals.
-- Native diff review, explicit approval, stale-change detection, and recovery.
-- Optional Laravel/PHP backend with PostgreSQL for accounts, settings, conversations, and usage.
-- Local-first code context: do not upload the entire workspace automatically.
+This is an early foundation—not yet a complete implementation of every feature in the master development specification. In particular, automatic AI tool orchestration, full MCP tool permission policies, line-level structured patching, an undo/recovery workflow, streaming chat, and the Laravel/PostgreSQL backend remain incomplete.
+
+## Current implemented foundation
+
+- VS Code activity-bar view and chat Webview.
+- OpenAI API request integration using the Responses API.
+- API-key storage via VS Code SecretStorage.
+- Commands to explain or request a proposal for selected code.
+- Configurable model name, file-size limits, file-count limits, and ignore patterns.
+- Workspace-relative path boundary validation.
+- Basic filtering for common secret/credential paths.
+- MCP client foundation for local stdio and remote HTTPS Streamable HTTP servers.
+- MCP server configuration and explicit connection confirmation.
+- MCP tool-list discovery/refresh foundation.
+- Patch proposal helpers with expected-content hashing, native diff staging, and an approval prompt.
+- CI workflow to install dependencies, type-check, run security tests, build, package a VSIX, and upload it as an artifact.
+
+MCP tools are not yet automatically called by the chat agent. The current chat does not automatically inspect or transmit workspace files. Selected code is sent to the configured OpenAI model only when using the explain/edit-selection commands.
 
 ## Security principles
 
 - Keep provider credentials in VS Code `SecretStorage`; never place API keys in source code or ordinary settings.
 - Require approval for code modifications and terminal commands by default.
-- Validate workspace-relative paths and prevent path traversal.
+- Validate workspace-relative paths and prevent basic path traversal.
 - Treat workspace files, MCP tool descriptions, and tool results as untrusted content.
 - Do not run MCP tools just because a server advertises them.
 - Make data sent to remote AI providers explicit and configurable.
 - Never report a successful build, test, deployment, or MCP connection unless it actually succeeded.
 
-## Planned repository structure
+## Repository structure
 
 ```text
 vsixmcp/
 ├── README.md
-├── LICENSE
 ├── .gitignore
 ├── package.json
-├── tsconfig.json
-├── esbuild.config.mjs
-├── .vscodeignore
-├── apps/
-│   ├── vscode-extension/
-│   │   ├── package.json
-│   │   ├── src/
-│   │   │   ├── extension.ts
-│   │   │   ├── ai/
-│   │   │   ├── agent/
-│   │   │   ├── mcp/
-│   │   │   ├── workspace/
-│   │   │   ├── patches/
-│   │   │   ├── review/
-│   │   │   └── security/
-│   │   ├── webview/
-│   │   └── tests/
-│   └── backend/
-│       ├── app/
-│       ├── routes/
-│       ├── database/migrations/
-│       └── tests/
-├── packages/
-│   ├── shared-types/
-│   └── patch-engine/
+├── .github/workflows/extension-ci.yml
+├── apps/vscode-extension/
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── esbuild.config.mjs
+│   ├── resources/activity.svg
+│   ├── src/
+│   │   ├── extension.ts
+│   │   ├── ai/openaiProvider.ts
+│   │   ├── agent/orchestrator.ts
+│   │   ├── mcp/manager.ts
+│   │   ├── security/paths.ts
+│   │   ├── security/patch.ts
+│   │   └── workspace/context.ts
+│   └── tests/
 └── docs/
     ├── architecture.md
+    ├── backend-deployment.md
+    ├── installation.md
     ├── mcp-setup.md
-    ├── security.md
-    └── backend-deployment.md
+    └── security.md
 ```
 
-This is the intended structure; directories will be added as their implementation begins.
+## Prerequisites
+
+- Node.js 20+ and npm 10+ for extension development.
+- A compatible VS Code version.
+- An OpenAI API key for live provider use. A ChatGPT subscription does not automatically include API credits.
+- PHP 8.3+, Composer, and PostgreSQL only when developing the planned optional backend.
+
+## Development
+
+From the repository root:
+
+```bash
+npm install
+npm run check-types
+npm test
+npm run build
+npm run package:vsix
+```
+
+The current focused Node.js security tests cover workspace path boundaries and common sensitive-path filters. They are not a replacement for VS Code extension-host integration tests or a full security audit.
+
+## Install a verified VSIX
+
+Download the `vsixmcp-extension` artifact from the successful [GitHub Actions run](https://github.com/abhinavstechdev/vsixmcp/actions/runs/38975716720). Extract the downloaded ZIP to obtain `vsixmcp-extension-0.1.0.vsix`.
+
+Install it in VS Code using **Extensions → … → Install from VSIX…**, or run:
+
+```bash
+code --install-extension ./vsixmcp-extension-0.1.0.vsix
+```
+
+After installation, open the MCP Coder activity-bar view and run **ChatGPT MCP: Configure OpenAI API Key** from the Command Palette before sending a live request.
 
 ## Development roadmap
 
-1. **Foundation:** VS Code extension manifest, TypeScript build, commands, and sidebar.
-2. **AI provider:** secure API-key configuration, streaming, tool calling, cancellation, and error handling.
-3. **MCP:** server configuration, supported transports, tool discovery/refresh, argument validation, and permissions.
-4. **Code editing:** workspace inspection, minimal patch proposals, native diff preview, acceptance/rejection, stale-patch detection, and undo.
-5. **Agent loop:** bounded orchestration, progress updates, diagnostics, and approved test execution.
-6. **Backend (optional):** Laravel APIs, PostgreSQL migrations, authentication, ownership checks, rate limits, and tests.
-7. **Validation and release:** automated tests, security checks, VSIX packaging, and installation documentation.
-
-## Prerequisites (planned)
-
-- A supported VS Code release.
-- Node.js and npm for extension development.
-- An OpenAI API key for live OpenAI requests; a ChatGPT subscription does not automatically provide API credits.
-- PHP 8.3+ and Composer only when developing the optional Laravel backend.
-- PostgreSQL only when enabling backend persistence.
-
-## Initial setup
-
-Once the extension scaffold and package scripts have been implemented, setup instructions will be documented here. Do not assume the repository is installable as a VSIX yet.
-
-## Testing and packaging
-
-The intended release checks are TypeScript type-checking, build, automated tests, linting, package-content validation, and `vsce package`. Record the actual command and result for each check before claiming it passed. A VSIX should be linked as a release artifact only after it has been generated and verified.
+1. Complete a bounded AI agent loop with proper tool calling, streaming, cancellation, and usage reporting.
+2. Finish MCP server management, schema validation, per-tool permissions, and error/reconnection handling.
+3. Improve edit proposals into minimal line/range and multi-file patches with robust stale-change detection and recovery.
+4. Add VS Code extension-host integration tests and package-content checks.
+5. Implement the optional Laravel API, PostgreSQL migrations, authentication, authorization, quotas, and backend tests.
+6. Continue security review before any production deployment.
 
 ## Backend hosting
 
-The planned backend may be hosted on `voroa.com`, subject to the server's PHP, Composer, and PostgreSQL capabilities. The VS Code extension's supported local workflows should continue to work when the backend is unavailable. Do not deploy to production or run destructive database operations without explicit authorization.
+The planned backend may be hosted on `voroa.com`, subject to the server's PHP, Composer, and PostgreSQL capabilities. The extension's supported local workflows should work when the backend is unavailable. No live deployment has been performed.
 
 ## Contributing
 
@@ -102,7 +117,7 @@ The planned backend may be hosted on `voroa.com`, subject to the server's PHP, C
 2. Keep changes focused and security-conscious.
 3. Add or update tests for changed behavior.
 4. Run the available checks and report skipped checks accurately.
-5. Open a pull request describing behavior changes, tests, and any known limitations.
+5. Open a pull request describing behavior changes, tests, and known limitations.
 
 ## License
 
