@@ -9,11 +9,9 @@ export interface PatchProposal {
   replacementContent: string;
   reason: string;
 }
-
 export function sha256(text: string): string {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
 }
-
 export async function createProposal(relativePath: string, replacementContent: string, reason: string): Promise<PatchProposal> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders?.length) throw new Error("Open a workspace before proposing a patch.");
@@ -23,22 +21,21 @@ export async function createProposal(relativePath: string, replacementContent: s
   const expectedContent = document.getText();
   return { relativePath, expectedSha256: sha256(expectedContent), expectedContent, replacementContent, reason };
 }
-
-/** Opens a native diff preview using an in-memory proposed document. Does not modify the target file. */
+/** Opens a native diff preview using temporary untitled documents; the target file is unchanged. */
 export async function previewProposal(proposal: PatchProposal): Promise<void> {
-  const original = vscode.Uri.parse(`untitled:${proposal.relativePath}`);
+  const original = vscode.Uri.parse(`untitled:${proposal.relativePath}.vsixmcp-original`);
   const proposed = vscode.Uri.parse(`untitled:${proposal.relativePath}.vsixmcp-proposed`);
   const originalDoc = await vscode.workspace.openTextDocument(original);
   const proposedDoc = await vscode.workspace.openTextDocument(proposed);
-  const edit = new vscode.WorkspaceEdit();
-  edit.insert(original, new vscode.Position(0, 0), proposal.expectedContent);
-  edit.insert(proposed, new vscode.Position(0, 0), proposal.replacementContent);
-  await vscode.workspace.applyEdit(edit);
-  await vscode.commands.executeCommand("vscode.diff", original, proposed, `Proposed: ${proposal.relativePath} — ${proposal.reason}`);
-  void originalDoc;
-  void proposedDoc;
+  const originalEdit = new vscode.WorkspaceEdit();
+  originalEdit.insert(original, new vscode.Position(0, 0), proposal.expectedContent);
+  const proposedEdit = new vscode.WorkspaceEdit();
+  proposedEdit.insert(proposed, new vscode.Position(0, 0), proposal.replacementContent);
+  if (!await vscode.workspace.applyEdit(originalEdit) || !await vscode.workspace.applyEdit(proposedEdit)) {
+    throw new Error("Could not prepare temporary diff documents.");
+  }
+  await vscode.commands.executeCommand("vscode.diff", originalDoc.uri, proposedDoc.uri, `Proposed: ${proposal.relativePath} — ${proposal.reason}`);
 }
-
 export async function applyApprovedProposal(proposal: PatchProposal): Promise<void> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders?.length) throw new Error("Workspace is no longer available.");
@@ -47,7 +44,7 @@ export async function applyApprovedProposal(proposal: PatchProposal): Promise<vo
   const document = await vscode.workspace.openTextDocument(uri);
   const currentContent = document.getText();
   if (sha256(currentContent) !== proposal.expectedSha256) {
-    throw new Error("The target file changed after this proposal was created. Re-read the file and generate a new proposal.");
+    throw new Error("The target file changed after this proposal was created. Read the current file and create a new proposal.");
   }
   const confirm = await vscode.window.showWarningMessage(
     `Apply the proposed AI edit to ${proposal.relativePath}?`,
@@ -56,9 +53,9 @@ export async function applyApprovedProposal(proposal: PatchProposal): Promise<vo
   );
   if (confirm !== "Apply edit") return;
   const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(currentContent.length));
-  const workspaceEdit = new vscode.WorkspaceEdit();
-  workspaceEdit.replace(uri, fullRange, proposal.replacementContent);
-  const applied = await vscode.workspace.applyEdit(workspaceEdit);
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(uri, fullRange, proposal.replacementContent);
+  const applied = await vscode.workspace.applyEdit(edit);
   if (!applied) throw new Error("VS Code rejected the edit; the file was not changed.");
   await document.save();
 }
