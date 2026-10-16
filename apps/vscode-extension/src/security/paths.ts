@@ -17,7 +17,8 @@ export function resolveWorkspacePath(root: vscode.Uri, relativePath: string): vs
 
 export function isProbablySensitive(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/").toLowerCase();
-  const base = normalized.split("/").pop() ?? normalized;
+  const parts = normalized.split("/").filter(Boolean);
+  const base = parts.at(-1) ?? normalized;
   return base === ".env" ||
     base.startsWith(".env.") ||
     base.includes("secret") ||
@@ -25,6 +26,6 @@ export function isProbablySensitive(relativePath: string): boolean {
     base.includes("private_key") ||
     base.endsWith(".pem") ||
     base.endsWith(".key") ||
-    normalized.includes("/.ssh/") ||
-    normalized.includes("/.aws/");
+    parts.includes(".ssh") ||
+    parts.includes(".aws");
 }
