@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
 import { OpenAIProvider } from "./ai/openaiProvider";
+import { McpManager, type McpServerConfig } from "./mcp/manager";
 import { getWorkspaceSummary, readWorkspaceFile } from "./workspace/context";
+import { createProposal, previewProposal, applyApprovedProposal } from "./security/patch";
 
 class ChatViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
-
   constructor(private readonly extensionUri: vscode.Uri, private readonly ai: OpenAIProvider) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -78,10 +79,37 @@ function getNonce(): string {
   return Array.from({ length: 32 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join("");
 }
 
+async function configureMcpServer(context: vscode.ExtensionContext): Promise<void> {
+  const name = await vscode.window.showInputBox({ title: "Add MCP server", prompt: "Unique server name", ignoreFocusOut: true });
+  if (!name?.trim()) return;
+  const transport = await vscode.window.showQuickPick([
+    { label: "Remote Streamable HTTP", value: "streamable-http" },
+    { label: "Local stdio process", value: "stdio" }
+  ], { title: "Choose MCP transport" });
+  if (!transport) return;
+  let config: McpServerConfig;
+  if (transport.value === "stdio") {
+    const command = await vscode.window.showInputBox({ title: "MCP executable", prompt: "Exact executable path; inspect and trust this program before continuing", ignoreFocusOut: true });
+    if (!command?.trim()) return;
+    const argsText = await vscode.window.showInputBox({ title: "MCP arguments", prompt: "Optional arguments separated by spaces; shell operators are not interpreted." });
+    config = { name: name.trim(), transport: "stdio", command: command.trim(), args: argsText?.trim() ? argsText.trim().split(/\s+/) : [], enabled: false };
+  } else {
+    const url = await vscode.window.showInputBox({ title: "MCP URL", prompt: "Use an HTTPS endpoint from a trusted server", placeHolder: "https://example.com/mcp", ignoreFocusOut: true });
+    if (!url?.trim()) return;
+    config = { name: name.trim(), transport: "streamable-http", url: url.trim(), enabled: false };
+  }
+  const stored = context.globalState.get<McpServerConfig[]>("vsixmcp.mcpServers", []);
+  if (stored.some(s => s.name === config.name)) return void vscode.window.showErrorMessage("A server with that name is already configured.");
+  await context.globalState.update("vsixmcp.mcpServers", [...stored, config]);
+  void vscode.window.showInformationMessage(`Saved MCP server "${config.name}" disabled. Connect to it explicitly when you are ready.`);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const ai = new OpenAIProvider(context.secrets);
   const chat = new ChatViewProvider(context.extensionUri, ai);
+  const mcp = new McpManager();
   context.subscriptions.push(
+    mcp,
     vscode.window.registerWebviewViewProvider("vsixmcp.chatView", chat, { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand("vsixmcp.openChat", async () => {
       await vscode.commands.executeCommand("workbench.view.extension.vsixmcp");
@@ -105,6 +133,34 @@ export function activate(context: vscode.ExtensionContext): void {
       const relative = vscode.workspace.asRelativePath(editor.document.uri, false);
       chat.postPrompt(`Suggest a minimal edit for the selected code in ${relative}. Return proposed replacement code and an explanation. Do not apply any changes automatically.\n\n${selected.slice(0, 8000)}`);
     }),
+    vscode.commands.registerCommand("vsixmcp.configureMcpServer", () => configureMcpServer(context)),
+    vscode.commands.registerCommand("vsixmcp.connectMcpServer", async () => {
+      const stored = context.globalState.get<McpServerConfig[]>("vsixmcp.mcpServers", []);
+      if (!stored.length) return void vscode.window.showInformationMessage("Add an MCP server first.");
+      const picked = await vscode.window.showQuickPick(stored.map(server => ({ label: server.name, description: server.transport, server })), { title: "Select MCP server" });
+      if (!picked) return;
+      const confirm = await vscode.window.showWarningMessage(`Trust and connect to "${picked.label}"?`, { modal: true, detail: "This will launch the configured executable or contact the remote endpoint." }, "Connect");
+      if (confirm !== "Connect") return;
+      try {
+        const names = await mcp.connect({ ...picked.server, enabled: true } as McpServerConfig);
+        void vscode.window.showInformationMessage(`Connected to ${picked.label}; discovered ${names.length} tool(s).`);
+      } catch (error) {
+        void vscode.window.showErrorMessage(error instanceof Error ? error.message : "MCP connection failed.");
+      }
+    }),
+    vscode.commands.registerCommand("vsixmcp.refreshMcpTools", async (serverName?: string) => {
+      const stored = context.globalState.get<McpServerConfig[]>("vsixmcp.mcpServers", []);
+      const name = serverName ?? (await vscode.window.showQuickPick(stored.map(s => s.name), { title: "Select connected MCP server" }));
+      if (!name) return;
+      try {
+        const tools = await mcp.listTools(name);
+        const selected = await vscode.window.showQuickPick(tools.map(t => ({ label: t.name, description: t.description ?? "", detail: JSON.stringify(t.inputSchema).slice(0, 300) })), { title: `Tools on ${name}`, placeHolder: "Tool catalog retrieved from server" });
+        void selected;
+        void vscode.window.showInformationMessage(`Refreshed MCP tools for ${name}: ${tools.length} tool(s).`);
+      } catch (error) {
+        void vscode.window.showErrorMessage(error instanceof Error ? error.message : "Could not refresh MCP tools.");
+      }
+    }),
     vscode.commands.registerCommand("vsixmcp.workspaceSummary", async () => {
       const summary = await getWorkspaceSummary();
       void vscode.window.showInformationMessage(summary.slice(0, 500));
@@ -114,6 +170,15 @@ export function activate(context: vscode.ExtensionContext): void {
       catch (error) {
         void vscode.window.showErrorMessage(error instanceof Error ? error.message : "Could not read file.");
         return undefined;
+      }
+    }),
+    vscode.commands.registerCommand("vsixmcp.previewPatch", async (relativePath: string, replacement: string, reason = "AI-proposed change") => {
+      const proposal = await createProposal(relativePath, replacement, reason);
+      await previewProposal(proposal);
+      const action = await vscode.window.showInformationMessage("Review the proposed change before applying it.", "Apply", "Reject");
+      if (action === "Apply") {
+        try { await applyApprovedProposal(proposal); }
+        catch (error) { void vscode.window.showErrorMessage(error instanceof Error ? error.message : "Patch could not be applied."); }
       }
     })
   );
