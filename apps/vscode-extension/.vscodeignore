@@ -4,4 +4,15 @@
 **/src/**
 **/tests/**
 **/*.map
+**/package-lock.json
+../**
+../../**
+!dist/**
+!resources/**
+!package.json
+!README.md
+!LICENSE
+!LICENSE.md
+!LICENSE.txt
 tsconfig.json
+esbuild.config.mjs
