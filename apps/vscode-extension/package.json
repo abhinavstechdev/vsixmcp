@@ -46,6 +46,22 @@
       {
         "command": "vsixmcp.clearApiKey",
         "title": "ChatGPT MCP: Clear OpenAI API Key"
+      },
+      {
+        "command": "vsixmcp.configureMcpServer",
+        "title": "ChatGPT MCP: Add MCP Server"
+      },
+      {
+        "command": "vsixmcp.connectMcpServer",
+        "title": "ChatGPT MCP: Connect MCP Server"
+      },
+      {
+        "command": "vsixmcp.refreshMcpTools",
+        "title": "ChatGPT MCP: Refresh MCP Tools"
+      },
+      {
+        "command": "vsixmcp.previewPatch",
+        "title": "ChatGPT MCP: Preview and Apply Proposed Patch"
       }
     ],
     "viewsContainers": {
