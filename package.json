@@ -1,0 +1,15 @@
+{
+  "name": "vsixmcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI coding assistant for VS Code with MCP support",
+  "license": "UNLICENSED",
+  "workspaces": ["apps/vscode-extension"],
+  "scripts": {
+    "build": "npm --workspace apps/vscode-extension run build",
+    "check-types": "npm --workspace apps/vscode-extension run check-types",
+    "test": "npm --workspace apps/vscode-extension run test",
+    "package:vsix": "npm --workspace apps/vscode-extension run package:vsix"
+  },
+  "engines": { "node": ">=20.0.0", "npm": ">=10.0.0" }
+}
